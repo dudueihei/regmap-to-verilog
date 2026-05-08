@@ -3,12 +3,12 @@
 One-shot Excel-to-Verilog wrapper.
 
 Usage:
-1. Put an .xlsx file into specs/
+1. Put an .xlsx file into templates/ or pass a file path explicitly
 2. Run:
    python3 excel_to_verilog.py
 
 Or explicitly:
-   python3 excel_to_verilog.py specs/your_regmap.xlsx
+   python3 excel_to_verilog.py your_regmap.xlsx
 """
 
 from __future__ import annotations
@@ -19,22 +19,24 @@ import sys
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parent
-SPECS_DIR = REPO_ROOT / "specs"
-GENERATOR = REPO_ROOT / "tools" / "regmap_codegen.py"
-RTL_DIR = REPO_ROOT / "rtl"
-INCLUDE_DIR = REPO_ROOT / "include"
+USER_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = USER_ROOT.parent
+TEMPLATE_DIR = USER_ROOT / "templates"
+GENERATOR = REPO_ROOT / "internal_package" / "core" / "regmap_codegen.py"
+OUTPUT_ROOT = USER_ROOT / "output"
+RTL_DIR = OUTPUT_ROOT / "rtl"
+INCLUDE_DIR = OUTPUT_ROOT / "include"
 
 
 def pick_default_xlsx() -> Path:
-    preferred = SPECS_DIR / "se_top_regmap_compact.xlsx"
+    preferred = TEMPLATE_DIR / "se_top_regmap_compact.xlsx"
     if preferred.exists():
         return preferred
 
-    candidates = sorted(SPECS_DIR.glob("*.xlsx"))
+    candidates = sorted(TEMPLATE_DIR.glob("*.xlsx"))
     if not candidates:
         raise FileNotFoundError(
-            f"specs/ 下没有找到 .xlsx 文件，请先放入 Excel 表。\n"
+            f"templates/ 下没有找到 .xlsx 文件，请先放入 Excel 表。\n"
             f"例如：{preferred}"
         )
     if len(candidates) == 1:

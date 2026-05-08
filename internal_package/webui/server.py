@@ -12,15 +12,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "tools"))
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO_ROOT / "internal_package" / "core"))
 
 from regmap_codegen import emit_module, emit_vh, parse_model, write_text  # noqa: E402
 
 
 HOST = "127.0.0.1"
 PORT = 8765
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "generated"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "user_package" / "output"
 
 
 def derive_module_name(spec: Path) -> str:

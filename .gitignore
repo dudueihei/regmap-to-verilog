@@ -15,5 +15,9 @@ __pycache__/
 
 # Test build artifacts
 build/
+internal_package/build/
 generated/
 generated_*/
+user_package/output/
+.DS_Store
+**/__pycache__/
