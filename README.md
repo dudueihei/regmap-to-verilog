@@ -28,6 +28,7 @@
 
 - UTF-8 / UTF-8-BOM 的 `CSV`
 - `TSV`
+- `.xlsx`
 - Markdown pipe table
 - 英文表头
 - 中文表头
@@ -65,10 +66,31 @@
 
 ## 快速开始
 
-在仓库根目录执行：
+最简方式：
+
+1. 把 Excel 文件放到 `specs/`
+2. 执行：
 
 ```bash
-python3 tools/regmap_codegen.py specs/se_top_regmap_compact.csv
+python3 excel_to_verilog.py
+```
+
+或者：
+
+```bash
+make excel
+```
+
+如果你在 macOS 上，也可以直接双击：
+
+```text
+excel_to_verilog.command
+```
+
+默认会优先使用：
+
+```text
+specs/se_top_regmap_compact.xlsx
 ```
 
 生成结果：
@@ -78,12 +100,44 @@ include/se_top_regs.vh
 rtl/se_top_regfile.v
 ```
 
+如果你想手动指定某个 Excel：
+
+```bash
+python3 excel_to_verilog.py specs/你的表格.xlsx
+```
+
+底层命令仍然可用：
+
+```bash
+python3 tools/regmap_codegen.py specs/se_top_regmap_compact.xlsx
+```
+
 ## 使用 Makefile
 
 也可以直接执行：
 
 ```bash
 make regmap
+```
+
+## 直接导出 Excel 模板
+
+如果你想让表格直接在 Excel 里维护，可以执行：
+
+```bash
+make xlsx
+```
+
+会生成：
+
+```text
+specs/se_top_regmap_compact.xlsx
+```
+
+之后可以直接在 Excel / WPS 里修改这个 `.xlsx`，再重新生成：
+
+```bash
+python3 tools/regmap_codegen.py specs/se_top_regmap_compact.xlsx
 ```
 
 ## 从详细表导出紧凑表
@@ -115,6 +169,8 @@ python3 tools/regmap_codegen.py \
 ├── specs/
 │   ├── se_top_regmap.tsv
 │   └── se_top_regmap_compact.csv
+├── tb/
+│   └── se_top_regfile_tb.sv
 ├── include/
 │   └── se_top_regs.vh
 ├── rtl/
@@ -123,3 +179,18 @@ python3 tools/regmap_codegen.py \
 ├── README.md
 └── .gitignore
 ```
+
+## Testbench
+
+仓库内带了一个针对示例输出 `se_top_regfile.v` 的自检 testbench：
+
+```bash
+make test
+```
+
+这个 testbench 会检查：
+
+- `RW` 字段写入与读回
+- `WO` 写使能和写数据
+- `W1C` 置位与写 1 清零
+- 部分 `RO` 字段读回路径

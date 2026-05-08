@@ -4,8 +4,9 @@ Generate Verilog register artifacts from a spreadsheet-friendly register table.
 
 Supported input format:
 1. UTF-8/UTF-8-BOM TSV or CSV exported from Excel/WPS/Numbers
-2. Markdown-style pipe table copied from docs/wiki
-2. Optional metadata comment lines at the top:
+2. `.xlsx` workbook edited directly in Excel/WPS/Numbers
+3. Markdown-style pipe table copied from docs/wiki
+4. Optional metadata comment lines at the top of text files:
    # module = se_top
    # base_addr = 0x0000
    # addr_width = 32
@@ -43,9 +44,11 @@ import datetime as dt
 import io
 import re
 import sys
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from xml.etree import ElementTree as ET
 
 
 BASE_REQUIRED_COLUMNS = {
@@ -119,6 +122,80 @@ HEADER_ALIASES = {
 
 SUPPORTED_ATTRS = {"RW", "RO", "WO", "W1C"}
 MARKDOWN_SEPARATOR_RE = re.compile(r"^:?-{3,}:?$")
+XML_NS = {
+    "main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+    "rel": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+}
+WORKSHEET_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+{sheet_rows}
+  </sheetData>
+</worksheet>
+"""
+WORKBOOK_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="{sheet_name}" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>
+"""
+WORKBOOK_RELS_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>
+"""
+ROOT_RELS_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>
+"""
+CONTENT_TYPES_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>
+"""
+STYLES_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
+  <fills count="2">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+  </fills>
+  <borders count="1"><border/></borders>
+  <cellStyleXfs count="1"><xf/></cellStyleXfs>
+  <cellXfs count="1"><xf xfId="0"/></cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>
+"""
+APP_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+ xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>regmap_codegen.py</Application>
+</Properties>
+"""
+CORE_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+ xmlns:dc="http://purl.org/dc/elements/1.1/"
+ xmlns:dcterms="http://purl.org/dc/terms/"
+ xmlns:dcmitype="http://purl.org/dc/dcmitype/"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:creator>regmap_codegen.py</dc:creator>
+  <cp:lastModifiedBy>regmap_codegen.py</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">{timestamp}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">{timestamp}</dcterms:modified>
+</cp:coreProperties>
+"""
 
 
 @dataclass
@@ -218,6 +295,23 @@ def detect_delimiter(lines: Sequence[str], source: Path) -> str:
     raise ValueError(f"Unable to detect delimiter for {source}")
 
 
+def excel_col_to_name(col_idx: int) -> str:
+    result = []
+    idx = col_idx
+    while idx > 0:
+        idx, rem = divmod(idx - 1, 26)
+        result.append(chr(ord("A") + rem))
+    return "".join(reversed(result))
+
+
+def escape_xml(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
 def trim_pipe_row(row: Sequence[str]) -> List[str]:
     cells = [cell.strip() for cell in row]
     if cells and cells[0] == "":
@@ -247,6 +341,96 @@ def validate_header(header: Sequence[str], source: Path) -> None:
         )
 
 
+def cell_text_from_xlsx(cell: ET.Element, shared_strings: Sequence[str]) -> str:
+    cell_type = cell.get("t")
+    if cell_type == "inlineStr":
+        text_nodes = cell.findall(".//main:t", XML_NS)
+        return "".join(node.text or "" for node in text_nodes)
+    value_node = cell.find("main:v", XML_NS)
+    if value_node is None or value_node.text is None:
+        return ""
+    value = value_node.text
+    if cell_type == "s":
+        return shared_strings[int(value)]
+    return value
+
+
+def parse_xlsx_shared_strings(archive: zipfile.ZipFile) -> List[str]:
+    if "xl/sharedStrings.xml" not in archive.namelist():
+        return []
+    root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+    values: List[str] = []
+    for item in root.findall("main:si", XML_NS):
+        text_nodes = item.findall(".//main:t", XML_NS)
+        values.append("".join(node.text or "" for node in text_nodes))
+    return values
+
+
+def load_rows_from_xlsx(source: Path) -> Tuple[Dict[str, str], List[Dict[str, str]]]:
+    with zipfile.ZipFile(source) as archive:
+        shared_strings = parse_xlsx_shared_strings(archive)
+        sheet_xml = archive.read("xl/worksheets/sheet1.xml")
+
+    root = ET.fromstring(sheet_xml)
+    rows_raw: List[List[str]] = []
+    for row in root.findall(".//main:sheetData/main:row", XML_NS):
+        cells: Dict[int, str] = {}
+        max_col = 0
+        for cell in row.findall("main:c", XML_NS):
+            ref = cell.get("r", "")
+            col_letters = "".join(ch for ch in ref if ch.isalpha())
+            col_idx = 0
+            for ch in col_letters:
+                col_idx = col_idx * 26 + (ord(ch.upper()) - ord("A") + 1)
+            if col_idx == 0:
+                continue
+            cells[col_idx] = cell_text_from_xlsx(cell, shared_strings).strip()
+            max_col = max(max_col, col_idx)
+        if max_col == 0:
+            rows_raw.append([])
+            continue
+        rows_raw.append([cells.get(idx, "").strip() for idx in range(1, max_col + 1)])
+
+    while rows_raw and (not rows_raw[0] or not any(cell for cell in rows_raw[0])):
+        rows_raw.pop(0)
+    if not rows_raw:
+        raise ValueError(f"No rows parsed from {source}")
+
+    metadata: Dict[str, str] = {}
+    header_row_idx: Optional[int] = None
+    for idx, row in enumerate(rows_raw):
+        normalized = [normalize_header(cell) for cell in row]
+        header_set = set(normalized)
+        has_required = BASE_REQUIRED_COLUMNS <= header_set
+        has_layout = "bits" in header_set or {"end_bit", "begin_bit"} <= header_set
+        if has_required and has_layout:
+            header_row_idx = idx
+            break
+        if len(row) >= 2 and row[0].strip():
+            key = normalize_symbol(row[0])
+            if key in {"module", "base_addr", "addr_width", "data_width", "addr_stride"}:
+                metadata[key] = row[1].strip()
+
+    if header_row_idx is None:
+        raise ValueError(
+            f"{source}: unable to find header row in xlsx sheet1; "
+            "expected columns like 偏移地址/寄存器名/字段名/位段/属性"
+        )
+
+    header = [normalize_header(cell) for cell in rows_raw[header_row_idx]]
+    validate_header(header, source)
+    normalized_rows: List[Dict[str, str]] = []
+    for row in rows_raw[header_row_idx + 1:]:
+        if not any(cell.strip() for cell in row):
+            continue
+        padded = list(row) + [""] * (len(header) - len(row))
+        entry = {header[idx]: padded[idx].strip() for idx in range(len(header))}
+        if not any(value.strip() for value in entry.values()):
+            continue
+        normalized_rows.append(entry)
+    return metadata, normalized_rows
+
+
 def parse_metadata(lines: Sequence[str]) -> Dict[str, str]:
     metadata: Dict[str, str] = {}
     for line in lines:
@@ -262,6 +446,9 @@ def parse_metadata(lines: Sequence[str]) -> Dict[str, str]:
 
 
 def load_rows(source: Path) -> Tuple[Dict[str, str], List[Dict[str, str]]]:
+    if source.suffix.lower() == ".xlsx":
+        return load_rows_from_xlsx(source)
+
     raw_lines = source.read_text(encoding="utf-8-sig").splitlines()
     metadata = parse_metadata(raw_lines)
     data_lines = [line for line in raw_lines if line.strip() and not line.strip().startswith("#")]
@@ -753,6 +940,82 @@ def emit_compact_table(model: RegModel, lang: str = "zh") -> str:
     return buf.getvalue()
 
 
+def emit_compact_rows(model: RegModel, lang: str = "zh") -> List[List[str]]:
+    if lang == "zh":
+        header = ["偏移地址", "寄存器名", "字段名", "位段", "属性", "复位值", "描述"]
+    else:
+        header = ["Offset", "Register", "Field", "Bits", "Access", "Reset", "Description"]
+
+    rows: List[List[str]] = [
+        ["module", model.module_name],
+        ["base_addr", f"0x{model.base_addr:X}"],
+        ["addr_width", str(model.addr_width)],
+        ["data_width", str(model.data_width)],
+        ["addr_stride", f"0x{model.addr_stride:X}"],
+        [],
+        header,
+    ]
+
+    for reg in model.registers:
+        first_field = True
+        for field_def in reg.fields:
+            offset = f"0x{reg.offset:X}" if first_field else ""
+            reg_name = reg.name if first_field else ""
+            reset = "" if field_def.reset_value == 0 else f"0x{field_def.reset_value:X}"
+            rows.append(
+                [
+                    offset,
+                    reg_name,
+                    field_def.name,
+                    format_bit_range(field_def.msb, field_def.lsb),
+                    field_def.attr,
+                    reset,
+                    field_def.description,
+                ]
+            )
+            first_field = False
+    return rows
+
+
+def emit_compact_xlsx(model: RegModel, lang: str = "zh", sheet_name: str = "regmap") -> bytes:
+    rows = emit_compact_rows(model, lang=lang)
+    sheet_rows: List[str] = []
+    for row_idx, row in enumerate(rows, start=1):
+        if not row:
+            sheet_rows.append(f'    <row r="{row_idx}"/>')
+            continue
+        cell_xml: List[str] = []
+        for col_idx, value in enumerate(row, start=1):
+            if value == "":
+                continue
+            cell_ref = f"{excel_col_to_name(col_idx)}{row_idx}"
+            if re.fullmatch(r"-?\d+(\.\d+)?", value):
+                cell_xml.append(f'      <c r="{cell_ref}"><v>{value}</v></c>')
+            else:
+                escaped = escape_xml(value)
+                cell_xml.append(
+                    f'      <c r="{cell_ref}" t="inlineStr"><is><t>{escaped}</t></is></c>'
+                )
+        sheet_rows.append(f'    <row r="{row_idx}">\n' + "\n".join(cell_xml) + "\n    </row>")
+
+    timestamp = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    workbook_xml = WORKBOOK_XML.format(sheet_name=escape_xml(sheet_name))
+    worksheet_xml = WORKSHEET_XML.format(sheet_rows="\n".join(sheet_rows))
+    core_xml = CORE_XML.format(timestamp=timestamp)
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", CONTENT_TYPES_XML)
+        archive.writestr("_rels/.rels", ROOT_RELS_XML)
+        archive.writestr("docProps/app.xml", APP_XML)
+        archive.writestr("docProps/core.xml", core_xml)
+        archive.writestr("xl/workbook.xml", workbook_xml)
+        archive.writestr("xl/_rels/workbook.xml.rels", WORKBOOK_RELS_XML)
+        archive.writestr("xl/styles.xml", STYLES_XML)
+        archive.writestr("xl/worksheets/sheet1.xml", worksheet_xml)
+    return output.getvalue()
+
+
 def default_outputs(spec_path: Path, module_name: str) -> Tuple[Path, Path]:
     project_root = spec_path.parent.parent
     out_vh = project_root / "include" / f"{module_name}_regs.vh"
@@ -763,6 +1026,11 @@ def default_outputs(spec_path: Path, module_name: str) -> Tuple[Path, Path]:
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def write_bytes(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -790,10 +1058,15 @@ def build_argparser() -> argparse.ArgumentParser:
         help="Optional compact CSV export path for spreadsheet editing",
     )
     parser.add_argument(
+        "--export-xlsx",
+        type=Path,
+        help="Optional compact XLSX export path for direct Excel editing",
+    )
+    parser.add_argument(
         "--compact-lang",
         choices=("zh", "en"),
         default="zh",
-        help="Header language for --export-compact (default: zh)",
+        help="Header language for compact CSV/XLSX export (default: zh)",
     )
     return parser
 
@@ -811,12 +1084,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     write_text(out_v, emit_module(model))
     if args.export_compact is not None:
         write_text(args.export_compact, emit_compact_table(model, lang=args.compact_lang))
+    if args.export_xlsx is not None:
+        write_bytes(args.export_xlsx, emit_compact_xlsx(model, lang=args.compact_lang))
 
     print(f"[OK] Spec     : {args.spec}")
     print(f"[OK] Header   : {out_vh}")
     print(f"[OK] Verilog  : {out_v}")
     if args.export_compact is not None:
         print(f"[OK] Compact  : {args.export_compact}")
+    if args.export_xlsx is not None:
+        print(f"[OK] XLSX     : {args.export_xlsx}")
     print(f"[OK] Registers: {len(model.registers)}")
     return 0
 

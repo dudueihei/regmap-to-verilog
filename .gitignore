@@ -12,3 +12,6 @@ obj_dir/
 # Python cache
 __pycache__/
 *.pyc
+
+# Test build artifacts
+build/
