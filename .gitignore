@@ -1,0 +1,14 @@
+.DS_Store
+
+# Simulation outputs
+sim/
+waves/
+
+# Verilator / build byproducts
+obj_dir/
+*.vcd
+*.log
+
+# Python cache
+__pycache__/
+*.pyc

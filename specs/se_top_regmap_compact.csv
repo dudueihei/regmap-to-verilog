@@ -1,0 +1,87 @@
+# module = se_top
+# base_addr = 0x0
+# addr_width = 32
+# data_width = 32
+# addr_stride = 0x4
+偏移地址,寄存器名,字段名,位段,属性,复位值,描述
+0x0,SE_CTRL,start,0,WO,,写 1 启动 SE
+,,stop,1,WO,,写 1 停止 SE
+,,soft_reset,2,WO,,写 1 软复位 SE 内部状态
+,,irq_en,3,RW,,中断使能
+,,reserved,31:4,RO,,保留，读 0
+0x4,SE_BOOT_PC,boot_pc,31:0,RW,,启动 PC
+0x8,SE_FETCH_CFG,fetch_enable,0,RW,,取指使能
+,,burst_beats,7:4,RW,,每次取指 burst beat 数
+,,fifo_waterline,15:8,RW,,FIFO 低水线阈值
+,,reserved,31:16,RO,,保留，读 0
+0xC,SE_MODE,single_step,0,RW,,单步执行模式
+,,trace_en,1,RW,,trace/debug 使能
+,,halt_on_illegal,2,RW,,非法指令时停机
+,,halt_on_unsupported,3,RW,,unsupported 指令时停机
+,,reserved,31:4,RO,,保留，读 0
+0x10,SE_STATUS,running,0,RO,,SE 正在运行
+,,idle,1,RO,,SE 空闲
+,,fetch_busy,2,RO,,取指存在未完成请求
+,,decode_hold,3,RO,,decode 当前被 hold
+,,lsu_pending,4,RO,,存在未完成 load response
+,,error,5,RO,,存在错误状态
+,,reserved,31:6,RO,,保留，读 0
+0x14,SE_PC_CUR,pc_cur,31:0,RO,,当前 fetch PC
+0x18,SE_PC_LAST_COMMIT,pc_last_commit,31:0,RO,,最近进入 execute 的指令 PC
+0x1C,SE_HOLD_REASON,scalar_raw,0,RO,,scalar RAW 冒险
+,,scalar_waw,1,RO,,scalar WAW 冒险
+,,desc_raw,2,RO,,descriptor RAW 冒险
+,,desc_waw,3,RO,,descriptor WAW 冒险
+,,lsu_busy,4,RO,,LSU outstanding 满或 dcache 不 ready
+,,ts_not_ready,5,RO,,目标 TS command queue 不 ready
+,,fifo_empty,6,RO,,指令 FIFO 空
+,,fifo_full,7,RO,,指令 FIFO 满
+,,reserved,31:8,RO,,保留，读 0
+0x20,SE_ERR_STATUS,illegal_instr,0,W1C,,非法指令错误
+,,unsupported_instr,1,W1C,,unsupported 指令错误
+,,mif_error,2,W1C,,MIF 返回错误
+,,pc_unaligned,3,W1C,,PC 非 32-bit 对齐
+,,fifo_overflow,4,W1C,,指令 FIFO 溢出
+,,fifo_underflow,5,W1C,,指令 FIFO 下溢
+,,lsu_error,6,W1C,,LSU 协议或返回错误
+,,reserved,31:7,RO,,保留，读 0
+0x24,SE_ERR_PC,err_pc,31:0,RO,,错误发生时的 PC
+0x28,SE_ERR_INST,err_inst,31:0,RO,,错误发生时的指令
+0x2C,SE_ERR_INFO,engine,2:0,RO,,错误相关 engine id
+,,desc_idx,8:3,RO,,错误相关 descriptor flat index
+,,rd,13:9,RO,,错误相关 rd
+,,rs1,18:14,RO,,错误相关 rs1
+,,rs2,23:19,RO,,错误相关 rs2
+,,reserved,31:24,RO,,保留，读 0
+0x30,SE_ERR_CLEAR,clear_mask,31:0,WO,,写 1 清除 SE_ERR_STATUS 对应错误位
+0x34,SE_CYCLE_CNT_L,cycle_cnt_l,31:0,RO,,运行周期计数低 32 位
+0x38,SE_CYCLE_CNT_H,cycle_cnt_h,31:0,RO,,运行周期计数高 32 位
+0x3C,SE_INST_CNT_L,inst_cnt_l,31:0,RO,,decode accept 指令计数低 32 位
+0x40,SE_INST_CNT_H,inst_cnt_h,31:0,RO,,decode accept 指令计数高 32 位
+0x44,SE_FETCH_REQ_CNT,fetch_req_cnt,31:0,RO,,取指请求次数
+0x48,SE_FETCH_STALL_CNT,fetch_stall_cnt,31:0,RO,,取指停顿周期数
+0x4C,SE_DECODE_HOLD_CNT,decode_hold_cnt,31:0,RO,,decode hold 周期数
+0x50,SE_ISSUE_CNT_VEC,issue_cnt_vec,31:0,RO,,Vector 发射次数
+0x54,SE_ISSUE_CNT_TENSOR,issue_cnt_tensor,31:0,RO,,Tensor 发射次数
+0x58,SE_ISSUE_CNT_TMA,issue_cnt_tma,31:0,RO,,TMA 发射次数
+0x5C,SE_ISSUE_CNT_CV,issue_cnt_cv,31:0,RO,,CV 发射次数
+0x60,SE_LSU_REQ_CNT,lsu_req_cnt,31:0,RO,,Dcache load 请求次数
+0x64,SE_LAST_INST,last_inst,31:0,RO,,最近进入 execute 的指令
+0x68,SE_LAST_DESC_IDX,last_desc_idx,5:0,RO,,最近访问的 Config_Reg flat index
+,,reserved,31:6,RO,,保留，读 0
+0x6C,SE_LAST_ISSUE_INFO,engine,2:0,RO,,最近发射 engine id
+,,issue_valid,3,RO,,最近 issue valid
+,,issue_ready,4,RO,,最近 issue ready
+,,reserved,31:5,RO,,保留，读 0
+0x70,SE_FIFO_LEVEL,fifo_level,7:0,RO,,指令 FIFO 当前水位
+,,reserved,31:8,RO,,保留，读 0
+0x74,SE_DESC_DBG_ADDR,desc_dbg_idx,5:0,RW,,描述符调试 flat index
+,,reserved,31:6,RO,,保留，读 0
+0x78,SE_DESC_DBG_DATA0,desc_dbg_data_31_0,31:0,RO,,描述符调试数据 [31:0]
+0x7C,SE_DESC_DBG_DATA1,desc_dbg_data_63_32,31:0,RO,,描述符调试数据 [63:32]
+0x80,SE_DESC_DBG_DATA2,desc_dbg_data_95_64,31:0,RO,,描述符调试数据 [95:64]
+0x84,SE_DESC_DBG_DATA3,desc_dbg_data_127_96,31:0,RO,,描述符调试数据 [127:96]
+0x88,SE_DESC_DBG_DATA4,desc_dbg_data_159_128,31:0,RO,,描述符调试数据 [159:128]
+0x8C,SE_DESC_DBG_DATA5,desc_dbg_data_191_160,31:0,RO,,描述符调试数据 [191:160]
+0x90,SE_DESC_DBG_DATA6,desc_dbg_data_223_192,31:0,RO,,描述符调试数据 [223:192]
+0x94,SE_DESC_DBG_DATA7,desc_dbg_data_255_224,31:0,RO,,描述符调试数据 [255:224]
