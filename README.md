@@ -10,3 +10,8 @@
 如果你是要直接使用工具，请进入：
 
 - [user_package](/Users/mac/work/se_reg/user_package)
+
+普通使用者最终只需要两种模式：
+
+1. 浏览器打开生成
+2. 命令行生成
