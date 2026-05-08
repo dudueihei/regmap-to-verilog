@@ -1,41 +1,111 @@
 # regmap-to-verilog
 
-一个把寄存器表自动生成 Verilog 文件的小工具。
+一个把寄存器 Excel 表格直接生成 Verilog 文件的小工具。
 
-适合把 Excel / WPS / Markdown 里维护的寄存器定义表，转换成：
+输入：
+- Excel / WPS 表格 `.xlsx`
 
+输出：
 - Verilog 宏定义头文件：`include/<module>_regs.vh`
 - Verilog 寄存器文件骨架：`rtl/<module>_regfile.v`
 
-## 当前仓库包含什么
+---
 
-这个仓库只保留和“寄存器表生成 Verilog”直接相关的内容：
+## 1. 给使用者的最简教程
 
-- 生成脚本：[tools/regmap_codegen.py](/Users/mac/work/ada300_snpu_rtl/tools/regmap_codegen.py)
-- 示例规格表：
-  - [specs/se_top_regmap.tsv](/Users/mac/work/ada300_snpu_rtl/specs/se_top_regmap.tsv)
-  - [specs/se_top_regmap_compact.csv](/Users/mac/work/ada300_snpu_rtl/specs/se_top_regmap_compact.csv)
-- 生成结果：
-  - [include/se_top_regs.vh](/Users/mac/work/ada300_snpu_rtl/include/se_top_regs.vh)
-  - [rtl/se_top_regfile.v](/Users/mac/work/ada300_snpu_rtl/rtl/se_top_regfile.v)
-- 辅助文件：
-  - [.gitignore](/Users/mac/work/ada300_snpu_rtl/.gitignore)
-  - [Makefile](/Users/mac/work/ada300_snpu_rtl/Makefile)
+如果你只是想用它，不想看实现细节，按下面 3 步就够了。
 
-## 支持的输入格式
+### 第 1 步：准备 Excel 表
 
-支持：
+直接修改这个模板：
 
-- UTF-8 / UTF-8-BOM 的 `CSV`
-- `TSV`
-- `.xlsx`
-- Markdown pipe table
-- 英文表头
-- 中文表头
+- [se_top_regmap_compact.xlsx](/Users/mac/work/se_reg/specs/se_top_regmap_compact.xlsx)
 
-推荐优先使用紧凑格式：
+或者把你自己的 `.xlsx` 文件放到：
 
-```csv
+- [specs](/Users/mac/work/se_reg/specs)
+
+### 第 2 步：一键生成
+
+进入仓库根目录后，执行下面任意一种方式。
+
+方式 A：终端执行
+
+```bash
+cd /Users/mac/work/se_reg
+python3 excel_to_verilog.py
+```
+
+方式 B：`make`
+
+```bash
+cd /Users/mac/work/se_reg
+make excel
+```
+
+方式 C：macOS 直接双击
+
+- [excel_to_verilog.command](/Users/mac/work/se_reg/excel_to_verilog.command)
+
+### 第 3 步：查看输出文件
+
+生成结果默认在：
+
+- [se_top_regs.vh](/Users/mac/work/se_reg/include/se_top_regs.vh)
+- [se_top_regfile.v](/Users/mac/work/se_reg/rtl/se_top_regfile.v)
+
+---
+
+## 2. 常见使用场景
+
+### 场景 1：直接用默认模板
+
+这是最推荐的方式。
+
+1. 改这个文件：
+   [se_top_regmap_compact.xlsx](/Users/mac/work/se_reg/specs/se_top_regmap_compact.xlsx)
+2. 执行：
+
+```bash
+cd /Users/mac/work/se_reg
+python3 excel_to_verilog.py
+```
+
+### 场景 2：你有自己的 Excel 文件
+
+比如你新建了：
+
+```text
+specs/my_regmap.xlsx
+```
+
+那就执行：
+
+```bash
+cd /Users/mac/work/se_reg
+python3 excel_to_verilog.py specs/my_regmap.xlsx
+```
+
+生成结果会自动输出到：
+
+```text
+include/my_regs.vh
+rtl/my_regfile.v
+```
+
+---
+
+## 3. Excel 表头怎么写
+
+推荐使用这套中文表头：
+
+```text
+偏移地址,寄存器名,字段名,位段,属性,复位值,描述
+```
+
+示例：
+
+```text
 偏移地址,寄存器名,字段名,位段,属性,复位值,描述
 0x0,SE_CTRL,start,0,WO,,写1启动
 ,,stop,1,WO,,写1停止
@@ -43,154 +113,104 @@
 0x4,SE_BOOT_PC,boot_pc,31:0,RW,,启动PC
 ```
 
-也支持传统详细格式：
-
-- `End Bit / Begin Bit / Width`
-- 或单列 `Bits`
-
-## 支持的属性
-
-当前生成器支持：
+支持的属性：
 
 - `RW`
 - `RO`
 - `WO`
 - `W1C`
 
-生成语义如下：
+支持的位段写法：
 
-- `RW`：内部寄存
-- `RO`：外部 `*_i` 输入
-- `WO`：生成 `*_we_o` 和 `*_wdata_o`
-- `W1C`：内部寄存，外部 `*_set_i` 置位，软件写 1 清零
+- `0`
+- `7:4`
+- `31:0`
 
-## 快速开始
+---
 
-最简方式：
+## 4. 文件怎么放
 
-1. 把 Excel 文件放到 `specs/`
-2. 执行：
+为了让别人拿到仓库就知道怎么看，这里把文件分成两类。
 
-```bash
-python3 excel_to_verilog.py
-```
+### 4.1 直接使用的文件
 
-或者：
+这些是普通使用者最该关注的文件：
 
-```bash
-make excel
-```
+- 一键生成入口：
+  - [excel_to_verilog.py](/Users/mac/work/se_reg/excel_to_verilog.py)
+  - [excel_to_verilog.command](/Users/mac/work/se_reg/excel_to_verilog.command)
+- Excel 规格表：
+  - [se_top_regmap_compact.xlsx](/Users/mac/work/se_reg/specs/se_top_regmap_compact.xlsx)
+- 生成结果：
+  - [se_top_regs.vh](/Users/mac/work/se_reg/include/se_top_regs.vh)
+  - [se_top_regfile.v](/Users/mac/work/se_reg/rtl/se_top_regfile.v)
 
-如果你在 macOS 上，也可以直接双击：
+如果只是“改表然后出 Verilog”，只看这些文件就够了。
 
-```text
-excel_to_verilog.command
-```
+### 4.2 其他配置 / 开发文件
 
-默认会优先使用：
+这些文件更偏开发、调试、扩展，不是普通使用者必须看的：
 
-```text
-specs/se_top_regmap_compact.xlsx
-```
+- 真实生成器实现：
+  - [regmap_codegen.py](/Users/mac/work/se_reg/tools/regmap_codegen.py)
+- 其他规格表示例：
+  - [se_top_regmap.tsv](/Users/mac/work/se_reg/specs/se_top_regmap.tsv)
+  - [se_top_regmap_compact.csv](/Users/mac/work/se_reg/specs/se_top_regmap_compact.csv)
+- 自检 testbench：
+  - [se_top_regfile_tb.sv](/Users/mac/work/se_reg/tb/se_top_regfile_tb.sv)
+- 辅助命令：
+  - [Makefile](/Users/mac/work/se_reg/Makefile)
+- 忽略规则：
+  - [.gitignore](/Users/mac/work/se_reg/.gitignore)
 
-生成结果：
+---
 
-```text
-include/se_top_regs.vh
-rtl/se_top_regfile.v
-```
-
-如果你想手动指定某个 Excel：
-
-```bash
-python3 excel_to_verilog.py specs/你的表格.xlsx
-```
-
-底层命令仍然可用：
-
-```bash
-python3 tools/regmap_codegen.py specs/se_top_regmap_compact.xlsx
-```
-
-## 使用 Makefile
-
-也可以直接执行：
-
-```bash
-make regmap
-```
-
-## 直接导出 Excel 模板
-
-如果你想让表格直接在 Excel 里维护，可以执行：
-
-```bash
-make xlsx
-```
-
-会生成：
+## 5. 仓库结构建议理解
 
 ```text
-specs/se_top_regmap_compact.xlsx
+se_reg/
+├── excel_to_verilog.py          # 普通用户用这个
+├── excel_to_verilog.command     # macOS 双击入口
+├── specs/                       # 放 Excel / CSV / TSV 规格表
+├── include/                     # 生成的 .vh
+├── rtl/                         # 生成的 .v
+├── tools/                       # 生成器源码
+├── tb/                          # testbench
+├── Makefile                     # 辅助命令
+└── README.md
 ```
 
-之后可以直接在 Excel / WPS 里修改这个 `.xlsx`，再重新生成：
+你可以把它理解成：
+
+- `specs/`：输入
+- `include/`、`rtl/`：输出
+- `tools/`、`tb/`：开发和验证
+
+---
+
+## 6. 验证生成结果
+
+仓库里带了一个示例 testbench，可以用来验证示例生成结果：
 
 ```bash
-python3 tools/regmap_codegen.py specs/se_top_regmap_compact.xlsx
-```
-
-## 从详细表导出紧凑表
-
-如果你已经有详细 TSV，可以导出更适合表格维护的紧凑 CSV：
-
-```bash
-python3 tools/regmap_codegen.py \
-  specs/se_top_regmap.tsv \
-  --export-compact specs/se_top_regmap_compact.csv \
-  --compact-lang zh
-```
-
-## 表格维护规则
-
-为了方便改表，脚本支持下面这些规则：
-
-- 同一寄存器的后续字段行，`寄存器名` 可以留空
-- 新寄存器如果 `偏移地址` 留空，会按 `addr_stride` 自动递增
-- 同一寄存器的续行如果 `偏移地址` 留空，则沿用当前寄存器地址
-- `位段` 支持写成 `31:0`、`7:4`、`0`
-
-## 仓库结构
-
-```text
-.
-├── tools/
-│   └── regmap_codegen.py
-├── specs/
-│   ├── se_top_regmap.tsv
-│   └── se_top_regmap_compact.csv
-├── tb/
-│   └── se_top_regfile_tb.sv
-├── include/
-│   └── se_top_regs.vh
-├── rtl/
-│   └── se_top_regfile.v
-├── Makefile
-├── README.md
-└── .gitignore
-```
-
-## Testbench
-
-仓库内带了一个针对示例输出 `se_top_regfile.v` 的自检 testbench：
-
-```bash
+cd /Users/mac/work/se_reg
 make test
 ```
 
-这个 testbench 会检查：
+当前 testbench 会检查：
 
 - `RW` 字段写入与读回
 - `WO` 写使能和写数据
 - `W1C` 置位与写 1 清零
 - 部分 `RO` 字段读回路径
+
+---
+
+## 7. 一句话总结
+
+如果你要教别人怎么用，最短版本就是：
+
+1. 打开 [se_top_regmap_compact.xlsx](/Users/mac/work/se_reg/specs/se_top_regmap_compact.xlsx)
+2. 修改寄存器表
+3. 运行 `python3 excel_to_verilog.py`
+4. 去 `rtl/` 和 `include/` 里拿生成结果
