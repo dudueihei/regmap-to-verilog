@@ -15,3 +15,5 @@ __pycache__/
 
 # Test build artifacts
 build/
+generated/
+generated_*/

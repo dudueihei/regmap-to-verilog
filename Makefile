@@ -2,7 +2,7 @@ SPEC ?= specs/se_top_regmap_compact.csv
 TOOL := tools/regmap_codegen.py
 XLSX_SPEC := specs/se_top_regmap_compact.xlsx
 
-.PHONY: regmap xlsx excel test
+.PHONY: regmap xlsx excel web test
 
 regmap:
 	python3 $(TOOL) $(SPEC)
@@ -12,6 +12,9 @@ xlsx:
 
 excel:
 	python3 excel_to_verilog.py
+
+web:
+	python3 webui/server.py
 
 test: regmap
 	mkdir -p build/tb

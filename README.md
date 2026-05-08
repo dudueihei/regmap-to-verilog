@@ -47,6 +47,50 @@ make excel
 
 - [excel_to_verilog.command](/Users/mac/work/se_reg/excel_to_verilog.command)
 
+### 第 2.5 步：如果是给别人用，推荐直接开网页
+
+这是最适合非开发同学的方式。
+
+启动网页：
+
+```bash
+cd /Users/mac/work/se_reg
+python3 webui/server.py
+```
+
+或者：
+
+```bash
+cd /Users/mac/work/se_reg
+make web
+```
+
+或者 macOS 直接双击：
+
+- [start_web.command](/Users/mac/work/se_reg/start_web.command)
+
+启动后浏览器打开：
+
+```text
+http://127.0.0.1:8765
+```
+
+网页里可以直接：
+
+1. 拖入 `.xlsx`
+2. 填写输出目录
+3. 点击“生成 Verilog”
+
+生成结果会自动写到你填写的目录下：
+
+```text
+输出目录/
+├── include/
+│   └── xxx_regs.vh
+└── rtl/
+    └── xxx_regfile.v
+```
+
 ### 第 3 步：查看输出文件
 
 生成结果默认在：
@@ -139,6 +183,9 @@ rtl/my_regfile.v
 - 一键生成入口：
   - [excel_to_verilog.py](/Users/mac/work/se_reg/excel_to_verilog.py)
   - [excel_to_verilog.command](/Users/mac/work/se_reg/excel_to_verilog.command)
+- 网页入口：
+  - [server.py](/Users/mac/work/se_reg/webui/server.py)
+  - [start_web.command](/Users/mac/work/se_reg/start_web.command)
 - Excel 规格表：
   - [se_top_regmap_compact.xlsx](/Users/mac/work/se_reg/specs/se_top_regmap_compact.xlsx)
 - 生成结果：
@@ -171,10 +218,12 @@ rtl/my_regfile.v
 se_reg/
 ├── excel_to_verilog.py          # 普通用户用这个
 ├── excel_to_verilog.command     # macOS 双击入口
+├── start_web.command            # 网页版双击启动
 ├── specs/                       # 放 Excel / CSV / TSV 规格表
 ├── include/                     # 生成的 .vh
 ├── rtl/                         # 生成的 .v
 ├── tools/                       # 生成器源码
+├── webui/                       # 本地网页
 ├── tb/                          # testbench
 ├── Makefile                     # 辅助命令
 └── README.md
